@@ -72,9 +72,15 @@ function processFallback(s, getPath, props) {
 // ? - query parameters in current url
 // : - path components as defined by react-router
 //
-function substitutePath(original, props) {
+function substitutePath(original, props, params) {
   // console.log('substitutePath(), props = ', props);
   let dynamicPartsSatisfied = true;
+
+  console.log("params", params);
+  console.log("props", props);
+
+  if(props.location && params)
+  props.location.query = params.query;
 
   // eslint-disable-next-line consistent-return
   const path = original.replace(/([:?$]){(.*?)}/g, (match, ns, name) => {
@@ -138,6 +144,7 @@ export default class RESTResource {
       DELETE: record => dispatch(this.deleteAction(record)),
       PUT: record => dispatch(this.updateAction(record)),
       POST: record => dispatch(this.createAction(record)),
+      GET: resource => this.refresh(dispatch, resource.props, resource)
     };
   }
 
@@ -156,9 +163,13 @@ export default class RESTResource {
     return this.crudName;
   }
 
-  refresh(dispatch, props) {
+  refresh(dispatch, props, resource) {
+
     if (this.optionsTemplate.fetch === false) return null;
     this.options = _.merge({}, this.optionsTemplate, this.optionsTemplate.GET);
+
+    if(resource) this.options.path = this.options.path.split("?{query:-}").join(resource.state.searchTerm);
+
     const { path, dynamicPartsSatisfied } = substitutePath(this.options.path, props);
     this.options.path = path; // This kind of permanent state-change seems wrong
 
@@ -288,14 +299,17 @@ export default class RESTResource {
 
 
   fetchAction() {
+
     const that = this;
     const crudActions = this.crudActions;
     const key = this.stateKey();
     return (dispatch, getState) => {
       const options = optionsFromState(that.options, getState());
+
       const { root, path, headers, GET, records } = options;
       // i.e. only join truthy elements
       const url = [root, path].filter(_.identity).join('/');
+
       dispatch(crudActions.fetchStart());
       return fetch(url, { headers: Object.assign({}, headers, GET.headers) })
         .then((response) => {
